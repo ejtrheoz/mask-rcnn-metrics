@@ -1,6 +1,8 @@
 import os
 import xml.etree
 from numpy import zeros, asarray
+import datetime
+import re
 
 import mrcnn.utils
 import mrcnn.config
@@ -72,6 +74,33 @@ class CobbleConfig(mrcnn.config.Config):
 
     STEPS_PER_EPOCH = 10
 
+class MaskRCNNCorrected(mrcnn.model.MaskRCNN):
+    def set_log_dir(self, model_path=None):
+
+        self.epoch = 0
+        now = datetime.datetime.now()
+
+        if model_path:
+
+            regex = r".*[/\\][\w-]+(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})[/\\]mask\_rcnn\_[\w-]+(\d{4})\.h5"
+            m = re.match(regex, model_path)
+            if m:
+                now = datetime.datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)),
+                                        int(m.group(4)), int(m.group(5)))
+
+                self.epoch = int(m.group(6)) - 1 + 1
+                print('Re-starting from epoch %d' % self.epoch)
+
+        # old was self.log_dir = "//logdir//train" 
+        # but it didn't work correct
+        self.log_dir = os.path.join("logdir", "train")
+
+        self.checkpoint_path = os.path.join(self.log_dir, "mask_rcnn_{}_*epoch*.h5".format(
+            self.config.NAME.lower()))
+        self.checkpoint_path = self.checkpoint_path.replace(
+            "*epoch*", "{epoch:04d}")
+        
+
 # Train
 train_dataset = CobbleDataset()
 train_dataset.load_dataset(dataset_dir='train', is_train=True)
@@ -86,7 +115,7 @@ validation_dataset.prepare()
 cobble_config = CobbleConfig()
 
 # Build the Mask R-CNN Model Architecture
-model = mrcnn.model.MaskRCNN(mode='training', 
+model = MaskRCNNCorrected(mode='training', 
                              model_dir='./', 
                              config=cobble_config)
 
